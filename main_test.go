@@ -15,6 +15,7 @@ import (
 	"github.com/kevalsabhani/go-assignment/db"
 	"github.com/kevalsabhani/go-assignment/handlers"
 	"github.com/kevalsabhani/go-assignment/services"
+	"github.com/kevalsabhani/go-assignment/types"
 )
 
 var testDB *sql.DB
@@ -34,19 +35,6 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestEmptyTable(t *testing.T) {
-	db.ClearEmployeeTable(testDB)
-
-	req, _ := http.NewRequest("GET", "/employees", nil)
-	response := executeRequest(req)
-
-	checkResponseCode(t, http.StatusOK, response.Code)
-
-	if body := response.Body.String(); body != "[]" {
-		t.Errorf("Expected an empty array. Got %s", body)
-	}
-}
-
 func executeRequest(req *http.Request) *httptest.ResponseRecorder {
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
@@ -57,6 +45,29 @@ func executeRequest(req *http.Request) *httptest.ResponseRecorder {
 func checkResponseCode(t *testing.T, expected, actual int) {
 	if expected != actual {
 		t.Errorf("Expected response code %d. Got %d\n", expected, actual)
+	}
+}
+
+func addEmployees(count int) {
+	if count < 1 {
+		count = 1
+	}
+
+	for i := 0; i < count; i++ {
+		testDB.Exec("INSERT INTO employees(name, position, salary) VALUES($1, $2, $3)", "Employee "+strconv.Itoa(i), "SE "+strconv.Itoa(i), (i+1.0)*1000)
+	}
+}
+
+func TestEmptyTable(t *testing.T) {
+	db.ClearEmployeeTable(testDB)
+
+	req, _ := http.NewRequest("GET", "/employees", nil)
+	response := executeRequest(req)
+
+	checkResponseCode(t, http.StatusOK, response.Code)
+
+	if body := response.Body.String(); body != "[]" {
+		t.Errorf("Expected an empty array. Got %s", body)
 	}
 }
 
@@ -104,7 +115,7 @@ func TestCreateEmployee(t *testing.T) {
 	}
 }
 
-func TestGetEmployee(t *testing.T) {
+func TestGetEmployeeById(t *testing.T) {
 	db.ClearEmployeeTable(testDB)
 	addEmployees(1)
 
@@ -114,15 +125,21 @@ func TestGetEmployee(t *testing.T) {
 	checkResponseCode(t, http.StatusOK, response.Code)
 }
 
-// main_test.go
+func TestGetEmployees(t *testing.T) {
+	db.ClearEmployeeTable(testDB)
+	expectedCount := 3
+	addEmployees(expectedCount)
 
-func addEmployees(count int) {
-	if count < 1 {
-		count = 1
-	}
+	req, _ := http.NewRequest("GET", "/employees", nil)
+	response := executeRequest(req)
 
-	for i := 0; i < count; i++ {
-		testDB.Exec("INSERT INTO employees(name, position, salary) VALUES($1, $2, $3)", "Employee "+strconv.Itoa(i), "SE "+strconv.Itoa(i), (i+1.0)*1000)
+	checkResponseCode(t, http.StatusOK, response.Code)
+	var employees []*types.Employee
+	json.Unmarshal(response.Body.Bytes(), &employees)
+
+	count := len(employees)
+	if count != expectedCount {
+		t.Errorf("Expected %v employees, but got %v", expectedCount, count)
 	}
 }
 
